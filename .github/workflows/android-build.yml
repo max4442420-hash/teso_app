@@ -37,9 +37,16 @@ jobs:
           unzip -q sdk-tools.zip -d cmdline-tools-temp
           rm sdk-tools.zip
 
+          # ✅ Ellenőrizzük a kicsomagolt tartalmat
+          ls -la cmdline-tools-temp/
+
           # ✅ Helyére rakjuk a "latest" mappát
           mkdir -p latest
-          mv cmdline-tools-temp/* latest/
+          if [ -d "cmdline-tools-temp/cmdline-tools" ]; then
+            mv cmdline-tools-temp/cmdline-tools/* latest/ || mv cmdline-tools-temp/cmdline-tools/. latest/
+          else
+            mv cmdline-tools-temp/* latest/ || mv cmdline-tools-temp/. latest/
+          fi
           rm -rf cmdline-tools-temp
 
           # ✅ Ellenőrzés
