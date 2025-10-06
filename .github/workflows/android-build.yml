@@ -3,62 +3,52 @@
     mkdir -p $HOME/android-sdk/cmdline-tools
     cd $HOME/android-sdk/cmdline-tools
 
-    # ✅ Letöltjük a Google SDK command line tools-t (ellenőrizd a verziót!)
+    echo "📦 Letöltjük az Android SDK command line tools-t..."
     curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
     unzip -q sdk-tools.zip -d cmdline-tools-temp
     rm sdk-tools.zip
 
-    # ✅ Ellenőrizzük a kicsomagolt tartalmat
-    ls -la cmdline-tools-temp/
-
-    # ✅ Helyére rakjuk a "latest" mappát
+    echo "📂 Átrendezzük a mappastruktúrát..."
     mkdir -p latest
     if [ -d "cmdline-tools-temp/cmdline-tools" ]; then
-      mv cmdline-tools-temp/cmdline-tools/* latest/ || mv cmdline-tools-temp/cmdline-tools/. latest/
+      mv cmdline-tools-temp/cmdline-tools/* latest/
     else
-      mv cmdline-tools-temp/* latest/ || mv cmdline-tools-temp/. latest/
+      mv cmdline-tools-temp/* latest/
     fi
     rm -rf cmdline-tools-temp
 
-    # ✅ Ellenőrzés
+    echo "🔍 Ellenőrizzük az sdkmanager létezését..."
     if [ ! -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
       echo "❌ sdkmanager nem található!"
       exit 1
     fi
 
-    ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+    export ANDROID_SDK_ROOT=$HOME/android-sdk
+    export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
 
-    # ✅ Licenszek elfogadása (ismételt próbálkozás és ellenőrzés)
-    yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
-    sleep 5  # Adunk időt a licenc elfogadásnak
-    yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses  # Második próbálkozás
-    # Ellenőrizzük, hogy a build-tools licence elfogadásra került-e
-    if ! $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --list_installed | grep -q "build-tools;36.1.0"; then
-      echo "⚠️ build-tools;36.1.0 nincs telepítve vagy licence nincs elfogadva!"
-      $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --list_installed  # Debug kimenet
-      exit 1
-    fi
+    echo "✅ Licenszek elfogadása..."
+    yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses > /dev/null
 
-    # ✅ Szükséges csomagok telepítése, beleértve a build-tools-t
-    yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
-      --sdk_root=$HOME/android-sdk \
-      "platform-tools" "platforms;android-34" "build-tools;36.1.0"
-    sleep 5  # Adunk időt a telepítésnek
+    echo "🧱 Telepítjük a szükséges komponenseket..."
+    yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
+      "platform-tools" "platforms;android-34" "build-tools;36.1.0" > /dev/null
 
-    # ✅ Ellenőrizzük a build-tools mappát
-    if [ ! -d "$HOME/android-sdk/build-tools/36.1.0" ]; then
+    echo "✅ Build-tools ellenőrzése..."
+    if [ ! -d "$ANDROID_SDK_ROOT/build-tools/36.1.0" ]; then
       echo "❌ build-tools 36.1.0 nem található!"
-      ls -la $HOME/android-sdk/build-tools/  # Debug célú kimenet
+      ls -la $ANDROID_SDK_ROOT/build-tools/
       exit 1
     fi
 
-    # ✅ Android NDK letöltés
+    echo "📦 Android NDK letöltése..."
     cd $HOME
     curl -o ndk.zip https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
     unzip -q ndk.zip
     rm ndk.zip
 
-    # ✅ PATH frissítés
+    echo "🛠️ PATH frissítése..."
     echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
     echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
     echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
+
+    echo "✅ SDK és NDK telepítve!"
