@@ -42,18 +42,20 @@ jobs:
           fi
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
-          sleep 5
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
+          sleep 10  # Növeltük az időt a licenc elfogadásnak
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses  # Második próbálkozás
           if ! $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --list_installed | grep -q "build-tools;36.1.0"; then
             echo "⚠️ build-tools;36.1.0 nincs telepítve vagy licence nincs elfogadva!"
-            $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --list_installed
+            $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --list_installed  # Debug kimenet
             exit 1
           fi
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-34" "build-tools;36.1.0"
-          sleep 5
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --verbose \
+            --sdk_root=$HOME/android-sdk \
+            "platform-tools" "platforms;android-34" "build-tools;36.1.0"
+          sleep 15  # Növeltük az időt a telepítésnek
           if [ ! -d "$HOME/android-sdk/build-tools/36.1.0" ]; then
             echo "❌ build-tools 36.1.0 nem található!"
-            ls -la $HOME/android-sdk/build-tools/
+            ls -la $HOME/android-sdk/build-tools/  # Debug célú kimenet
             exit 1
           fi
           cd $HOME
