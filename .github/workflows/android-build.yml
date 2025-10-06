@@ -61,7 +61,13 @@ jobs:
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
             --sdk_root=$HOME/android-sdk \
-            "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+            "platform-tools" "platforms;android-34" "build-tools;36.1.0"  # Explicite build-tools hozzáadva
+
+          # ✅ Ellenőrizzük a build-tools mappát
+          if [ ! -d "$HOME/android-sdk/build-tools/36.1.0" ]; then
+            echo "❌ build-tools 36.1.0 nem található!"
+            exit 1
+          fi
 
           # ✅ Android NDK letöltés
           cd $HOME
@@ -82,6 +88,7 @@ jobs:
           git --version
           ls -la $HOME/.local/bin/
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+          ls -la $HOME/android-sdk/build-tools/
           ls -la $HOME/android-ndk-r25b | head -n 10
 
       - name: Initialize buildozer
