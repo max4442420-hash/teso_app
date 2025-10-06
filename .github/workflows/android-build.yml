@@ -13,11 +13,13 @@ jobs:
     steps:
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: false  # Submodule-ok letiltása, mert a .buildozer nem része a repo-nak
 
       - name: 🧰 Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"  # Python 3.11 a szkripted alapján
 
       - name: ⚙️ Install system dependencies
         run: |
@@ -25,7 +27,8 @@ jobs:
           sudo apt-get install -y \
             unzip zip libffi-dev libssl-dev \
             autoconf automake libtool pkg-config \
-            libncurses5 libncurses5-dev libtinfo5
+            libncurses5 libncurses5-dev libtinfo5 \
+            git openjdk-17-jdk  # Git és JDK hozzáadása
 
       - name: 🐍 Install Buildozer
         run: |
@@ -51,11 +54,42 @@ jobs:
           yes | sdkmanager --licenses
           sdkmanager "platforms;android-33" "build-tools;34.0.0" "platform-tools"
 
+      - name: 🧹 Clean Buildozer cache
+        run: |
+          rm -rf ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/hostpython3
+          rm -rf ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build
+          buildozer android clean
+
+      - name: 📥 Clone Python 3.11 source
+        run: |
+          mkdir -p ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/
+          cd ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/
+          if [ ! -d "hostpython3" ]; then
+            git clone --branch 3.11 https://github.com/python/cpython hostpython3
+          else
+            echo "hostpython3 already exists, skipping clone."
+          fi
+
+      - name: 🛠️ Patch fileutils.c for Android
+        run: |
+          cd ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/hostpython3/Python
+          if [ -f "fileutils.c" ]; then
+            cp fileutils.c fileutils.c.bak
+            if grep -q "close_range(first, last, 0)" fileutils.c; then
+              sed -i 's/if (close_range(first, last, 0) == 0)/#ifdef __ANDROID__\n    for (int fd = first; fd <= last; fd++) { close(fd); }\n#else\n    if (close_range(first, last, 0) == 0)/' fileutils.c
+            else
+              echo "Warning: close_range not found in fileutils.c, skipping patch."
+            fi
+          else
+            echo "Error: fileutils.c not found."
+            exit 1
+          fi
+
       - name: 🏗️ Build APK with Buildozer
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
-          buildozer android debug
+          buildozer -v android debug
 
       - name: 📤 Upload built APK
         uses: actions/upload-artifact@v4
