@@ -1,54 +1,118 @@
- name: Download Android SDK and NDK
-  run: |
-    mkdir -p $HOME/android-sdk/cmdline-tools
-    cd $HOME/android-sdk/cmdline-tools
+name: Build Android APK
 
-    echo "📦 Letöltjük az Android SDK command line tools-t..."
-    curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-    unzip -q sdk-tools.zip -d cmdline-tools-temp
-    rm sdk-tools.zip
+on:
+  workflow_dispatch:
 
-    echo "📂 Átrendezzük a mappastruktúrát..."
-    mkdir -p latest
-    if [ -d "cmdline-tools-temp/cmdline-tools" ]; then
-      mv cmdline-tools-temp/cmdline-tools/* latest/
-    else
-      mv cmdline-tools-temp/* latest/
-    fi
-    rm -rf cmdline-tools-temp
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-    echo "🔍 Ellenőrizzük az sdkmanager létezését..."
-    if [ ! -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
-      echo "❌ sdkmanager nem található!"
-      exit 1
-    fi
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    export ANDROID_SDK_ROOT=$HOME/android-sdk
-    export PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    echo "✅ Licenszek elfogadása..."
-    yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT --licenses > /dev/null
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip unzip openjdk-17-jdk python3-pip curl git
+          pip install --upgrade pip
+          pip install --user buildozer==1.5.0 cython virtualenv
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/bin:$PATH"
+          buildozer --version
+          git --version
 
-    echo "🧱 Telepítjük a szükséges komponenseket..."
-    yes | sdkmanager --sdk_root=$ANDROID_SDK_ROOT \
-      "platform-tools" "platforms;android-34" "build-tools;36.1.0" > /dev/null
+      - name: Download Android SDK and NDK
+        run: |
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk/cmdline-tools
 
-    echo "✅ Build-tools ellenőrzése..."
-    if [ ! -d "$ANDROID_SDK_ROOT/build-tools/36.1.0" ]; then
-      echo "❌ build-tools 36.1.0 nem található!"
-      ls -la $ANDROID_SDK_ROOT/build-tools/
-      exit 1
-    fi
+          # ✅ SDK command line tools letöltése
+          curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip -q sdk-tools.zip -d cmdline-tools-temp
+          rm sdk-tools.zip
 
-    echo "📦 Android NDK letöltése..."
-    cd $HOME
-    curl -o ndk.zip https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
-    unzip -q ndk.zip
-    rm ndk.zip
+          # ✅ Helyére rakjuk a "latest" mappát
+          mkdir -p latest
+          if [ -d "cmdline-tools-temp/cmdline-tools" ]; then
+            mv cmdline-tools-temp/cmdline-tools/* latest/
+          else
+            mv cmdline-tools-temp/* latest/
+          fi
+          rm -rf cmdline-tools-temp
 
-    echo "🛠️ PATH frissítése..."
-    echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-    echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
-    echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
+          # ✅ Ellenőrzés
+          if [ ! -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "❌ sdkmanager nem található!"
+            exit 1
+          fi
 
-    echo "✅ SDK és NDK telepítve!"
+          # ✅ Licenszek elfogadása és SDK telepítések
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+            --sdk_root=$HOME/android-sdk \
+            "platform-tools" "platforms;android-34" "build-tools;36.1.0"
+
+          # ✅ Ellenőrzés
+          if [ ! -d "$HOME/android-sdk/build-tools/36.1.0" ]; then
+            echo "❌ build-tools 36.1.0 nem található!"
+            exit 1
+          fi
+
+          # ✅ Android NDK letöltése
+          cd $HOME
+          curl -o ndk.zip https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+          unzip -q ndk.zip
+          rm ndk.zip
+
+          # ✅ PATH frissítés
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
+
+      - name: Debug environment
+        run: |
+          echo "PATH: $PATH"
+          python3 --version
+          pip list | grep buildozer
+          git --version
+          ls -la $HOME/android-sdk/build-tools/
+          ls -la $HOME/android-ndk-r25b | head -n 10
+
+      - name: Initialize Buildozer
+        run: |
+          buildozer init || true
+          sed -i 's/# package.domain = mydomain/package.domain = max4442/g' buildozer.spec
+          sed -i 's/# package.name = myapp/package.name = teso_app/g' buildozer.spec
+          sed -i 's/requirements = python3,hostpython3/requirements = python3,kivy==2.1.0/g' buildozer.spec
+          echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
+          echo "android.ndk_path = $HOME/android-ndk-r25b" >> buildozer.spec
+          cat buildozer.spec
+
+      - name: Clean Buildozer cache
+        run: |
+          rm -rf .buildozer
+
+      - name: Verify buildozer before build
+        run: |
+          which buildozer
+          buildozer --version
+
+      - name: Build APK
+        run: |
+          which git
+          git --version
+          buildozer -v android debug
+        env:
+          PATH: /usr/bin:${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: teso_app-apk
+          path: bin/*.apk
