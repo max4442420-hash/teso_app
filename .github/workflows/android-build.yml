@@ -1,109 +1,40 @@
-name: Build Android APK
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zip unzip openjdk-17-jdk python3-pip curl git
-          pip install --upgrade pip
-          pip install --user buildozer==1.5.0 cython virtualenv
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-          export PATH="$HOME/.local/bin:$PATH"
-          buildozer --version || { echo "⚠️ Buildozer command failed"; exit 1; }
-          git --version || { echo "⚠️ Git not found"; exit 1; }
-
-      - name: Download Android SDK and NDK
+- name: Download Android SDK and NDK
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
 
-          # ✅ Letöltjük a Google SDK command line tools-t (ellenőrizd a verziót!)
+          echo "⬇️ Downloading Android SDK tools..."
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q sdk-tools.zip -d cmdline-tools-temp
+          unzip -q sdk-tools.zip
           rm sdk-tools.zip
 
-          # ✅ Helyére rakjuk a "latest" mappát
-          mkdir -p latest
-          mv cmdline-tools-temp/* latest/
-          rm -rf cmdline-tools-temp
+          # ✅ Új struktúra miatt mozgatás:
+          if [ -d "$HOME/android-sdk/cmdline-tools/cmdline-tools" ]; then
+            mv cmdline-tools latest
+          else
+            mkdir -p latest
+            mv * latest/
+          fi
 
-          # ✅ Ellenőrzés
+          echo "📂 Checking SDK manager..."
+          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+
           if [ ! -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "❌ sdkmanager nem található!"
+            echo "❌ sdkmanager nem található, kilépés."
             exit 1
           fi
 
-          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
-
-          # ✅ Licenszek elfogadása és szükséges csomagok telepítése
+          echo "✅ Licenszek elfogadása..."
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
             --sdk_root=$HOME/android-sdk \
             "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-          # ✅ Android NDK letöltés
           cd $HOME
           curl -o ndk.zip https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
           unzip -q ndk.zip
           rm ndk.zip
 
-          # ✅ PATH frissítés
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
           echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
-
-      - name: Debug environment
-        run: |
-          echo "PATH: $PATH"
-          python3 --version
-          pip list
-          git --version
-          ls -la $HOME/.local/bin/
-          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
-          ls -la $HOME/android-ndk-r25b | head -n 10
-
-      - name: Initialize buildozer
-        run: |
-          buildozer init || true
-          sed -i 's/# package.domain = mydomain/package.domain = max4442/g' buildozer.spec
-          sed -i 's/# package.name = myapp/package.name = teso_app/g' buildozer.spec
-          sed -i 's/requirements = python3,hostpython3/requirements = python3,kivy==2.1.0/g' buildozer.spec  # Explicit Kivy verzió
-          echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
-          echo "android.ndk_path = $HOME/android-ndk-r25b" >> buildozer.spec
-          cat buildozer.spec
-
-      - name: Clean Buildozer cache
-        run: |
-          rm -rf .buildozer
-
-      - name: Verify buildozer before build
-        run: |
-          which buildozer || { echo "⚠️ buildozer not found"; exit 1; }
-          buildozer --version
-
-      - name: Build APK
-        run: |
-          buildozer -v android debug
-        env:
-          PATH: ${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: teso_app-apk
-          path: bin/*.apk
