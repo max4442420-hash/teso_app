@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Repo checkout
+      # 1️⃣ Forrás letöltése
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -29,7 +29,6 @@ jobs:
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/bin:$PATH"
           buildozer --version
-          git --version
 
       # 3️⃣ Android SDK letöltés
       - name: Download Android SDK
@@ -38,10 +37,8 @@ jobs:
           mkdir -p $HOME/android-sdk
           cd $HOME/android-sdk
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip sdk-tools.zip -d extracted
-          mv extracted/cmdline-tools latest
-          mkdir -p $HOME/android-sdk/cmdline-tools
-          mv latest $HOME/android-sdk/cmdline-tools/
+          unzip sdk-tools.zip -d cmdline-tools
+          mv cmdline-tools $HOME/android-sdk/cmdline-tools/latest
           echo "✅ SDK tools installed"
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin
 
@@ -50,9 +47,17 @@ jobs:
         run: |
           echo "📜 Accepting licenses..."
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses || true
-          echo "⚙️ Installing platform tools..."
+
+          echo "⚙️ Installing required SDK components..."
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk \
-            "platform-tools" "build-tools;34.0.0" "platforms;android-34" "ndk;26.1.10909125"
+            "platform-tools" \
+            "build-tools;35.0.0" \
+            "platforms;android-34" \
+            "ndk;26.1.10909125" \
+            "cmdline-tools;latest"
+
+          echo "✅ SDK setup complete"
+          ls -la $HOME/android-sdk/build-tools/35.0.0 || echo "❌ build-tools not found!"
 
       # 5️⃣ Buildozer build
       - name: Build APK with Buildozer
@@ -60,10 +65,10 @@ jobs:
           echo "🧱 Starting Buildozer..."
           export ANDROIDSDK="$HOME/android-sdk"
           export ANDROIDNDK="$HOME/android-sdk/ndk/26.1.10909125"
-          export PATH="$ANDROIDSDK/platform-tools:$PATH"
+          export PATH="$ANDROIDSDK/platform-tools:$ANDROIDSDK/build-tools/35.0.0:$PATH"
           buildozer android debug
 
-      # 6️⃣ APK mentése
+      # 6️⃣ APK feltöltése
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
