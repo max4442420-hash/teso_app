@@ -14,7 +14,7 @@ jobs:
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: false  # Submodule-ok letiltása a korábbi dav1d hiba miatt
+          submodules: false  # Submodule-ok letiltása a dav1d hiba elkerülésére
 
       - name: 🧰 Set up Python
         uses: actions/setup-python@v5
@@ -28,12 +28,12 @@ jobs:
             unzip zip libffi-dev libssl-dev \
             autoconf automake libtool pkg-config \
             libncurses6 libncursesw6 libtinfo6 \
-            git openjdk-17-jdk  # Frissített csomagok és szükséges függőségek
+            git openjdk-17-jdk
 
-      - name: 🐍 Install Buildozer
+      - name: 🐍 Install Buildozer and python-for-android
         run: |
           pip install --upgrade pip
-          pip install buildozer cython virtualenv
+          pip install buildozer cython virtualenv python-for-android
 
       - name: 📦 Download Android SDK
         run: |
@@ -89,7 +89,14 @@ jobs:
         run: |
           export ANDROID_HOME=$HOME/android-sdk
           export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
-          buildozer -v android debug
+          buildozer -v android debug 2>&1 | tee buildozer.log
+
+      - name: 📤 Upload Buildozer log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: buildozer-log
+          path: buildozer.log
 
       - name: 📤 Upload built APK
         uses: actions/upload-artifact@v4
