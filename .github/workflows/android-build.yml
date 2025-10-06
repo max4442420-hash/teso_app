@@ -19,7 +19,7 @@ jobs:
       - name: 🧰 Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"  # Python 3.11 a szkripted alapján
+          python-version: "3.11"
 
       - name: ⚙️ Install system dependencies
         run: |
@@ -34,6 +34,7 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install buildozer cython virtualenv python-for-android
+          pip show python-for-android  # Ellenőrzi, hogy a python-for-android telepítve van-e
 
       - name: 📦 Download Android SDK
         run: |
@@ -92,13 +93,14 @@ jobs:
           buildozer -v android debug 2>&1 | tee buildozer.log
 
       - name: 📤 Upload Buildozer log
-        if: failure()
+        if: always()  # Mindig feltölti a naplót, hogy lássuk a hibát
         uses: actions/upload-artifact@v4
         with:
           name: buildozer-log
           path: buildozer.log
 
       - name: 📤 Upload built APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: teso_app
