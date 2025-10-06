@@ -1,3 +1,4 @@
+
 name: Build Android APK
 
 on:
@@ -69,6 +70,7 @@ jobs:
           # ✅ Ellenőrizzük a build-tools mappát
           if [ ! -d "$HOME/android-sdk/build-tools/36.1.0" ]; then
             echo "❌ build-tools 36.1.0 nem található!"
+            ls -la $HOME/android-sdk/build-tools/  # Debug célú kimenet
             exit 1
           fi
 
