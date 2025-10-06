@@ -24,15 +24,15 @@ jobs:
           pip install --user buildozer==1.5.0 cython virtualenv
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/bin:$PATH"
-          buildozer --version
-          git --version
+          buildozer --version || { echo "⚠️ Buildozer command failed"; exit 1; }
+          git --version || { echo "⚠️ Git not found"; exit 1; }
 
       - name: Download Android SDK and NDK
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
 
-          # ✅ Letöltjük a Google SDK command line tools-t
+          # ✅ Letöltjük a Google SDK command line tools-t (ellenőrizd a verziót!)
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q sdk-tools.zip -d cmdline-tools-temp
           rm sdk-tools.zip
@@ -71,7 +71,7 @@ jobs:
         run: |
           echo "PATH: $PATH"
           python3 --version
-          pip list | grep buildozer
+          pip list
           git --version
           ls -la $HOME/.local/bin/
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
@@ -82,7 +82,7 @@ jobs:
           buildozer init || true
           sed -i 's/# package.domain = mydomain/package.domain = max4442/g' buildozer.spec
           sed -i 's/# package.name = myapp/package.name = teso_app/g' buildozer.spec
-          sed -i 's/requirements = python3,hostpython3/requirements = python3,kivy/g' buildozer.spec
+          sed -i 's/requirements = python3,hostpython3/requirements = python3,kivy==2.1.0/g' buildozer.spec  # Explicit Kivy verzió
           echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
           echo "android.ndk_path = $HOME/android-ndk-r25b" >> buildozer.spec
           cat buildozer.spec
@@ -93,7 +93,7 @@ jobs:
 
       - name: Verify buildozer before build
         run: |
-          which buildozer || echo "⚠️ buildozer not found"
+          which buildozer || { echo "⚠️ buildozer not found"; exit 1; }
           buildozer --version
 
       - name: Build APK
