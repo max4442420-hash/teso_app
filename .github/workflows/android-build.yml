@@ -22,12 +22,7 @@ jobs:
           sudo apt-get install -y zip unzip openjdk-17-jdk python3-pip curl
           pip install --upgrade pip
           pip install buildozer cython virtualenv
-
-      - name: Set environment variables
-        run: |
-          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-          echo "ANDROID_NDK_HOME=$HOME/android-ndk-r25b" >> $GITHUB_ENV
-          echo "PATH=$PATH:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-sdk/platform-tools:$HOME/android-ndk-r25b" >> $GITHUB_ENV
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Download Android SDK and NDK
         run: |
@@ -36,8 +31,8 @@ jobs:
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q sdk-tools.zip -d latest
           rm sdk-tools.zip
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+          echo "yes" | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+          echo "yes" | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
             "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
           cd $HOME
@@ -45,18 +40,28 @@ jobs:
           unzip -q ndk.zip
           rm ndk.zip
 
-      - name: Verify SDK installation
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
+
+      - name: Verify tools
         run: |
-          ls -l $HOME/android-sdk/build-tools || echo "⚠️ Build-tools directory not found!"
-          $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --list | head -n 30
+          which buildozer || echo "⚠️ buildozer not found"
+          which sdkmanager || echo "⚠️ sdkmanager not found"
+          which javac || echo "⚠️ javac not found"
+          buildozer version || echo "⚠️ buildozer command failed"
+
+      - name: Initialize buildozer
+        run: |
+          buildozer init || true
+          sed -i 's/# package.domain = mydomain/package.domain = max4442/g' buildozer.spec
+          sed -i 's/# package.name = myapp/package.name = teso_app/g' buildozer.spec
 
       - name: Build APK
         run: |
           buildozer android debug
         env:
-          PATH: ~/.local/bin:$PATH
-          ANDROIDSDK: ${{ env.ANDROID_SDK_ROOT }}
-          ANDROIDNDK: ${{ env.ANDROID_NDK_HOME }}
+          PATH: ${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
