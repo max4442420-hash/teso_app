@@ -32,39 +32,37 @@ jobs:
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
 
-          echo "⬇️ Downloading Android SDK tools..."
+          # ✅ Letöltjük a Google SDK command line tools-t
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q sdk-tools.zip
+          unzip -q sdk-tools.zip -d cmdline-tools-temp
           rm sdk-tools.zip
 
-          # ✅ Új SDK struktúra javítása
-          if [ -d "$HOME/android-sdk/cmdline-tools/cmdline-tools" ]; then
-            mv cmdline-tools latest
-          else
-            mkdir -p latest
-            mv * latest/
-          fi
+          # ✅ Helyére rakjuk a "latest" mappát
+          mkdir -p latest
+          mv cmdline-tools-temp/* latest/
+          rm -rf cmdline-tools-temp
 
-          echo "📂 Checking SDK manager..."
-          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
-
+          # ✅ Ellenőrzés
           if [ ! -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "❌ sdkmanager nem található, kilépés."
+            echo "❌ sdkmanager nem található!"
             exit 1
           fi
 
-          echo "✅ Licenszek elfogadása és csomagok telepítése..."
+          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+
+          # ✅ Licenszek elfogadása és szükséges csomagok telepítése
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
             --sdk_root=$HOME/android-sdk \
             "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
+          # ✅ Android NDK letöltés
           cd $HOME
-          echo "⬇️ Letöltés: Android NDK..."
           curl -o ndk.zip https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
           unzip -q ndk.zip
           rm ndk.zip
 
+          # ✅ PATH frissítés
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
           echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
@@ -100,9 +98,12 @@ jobs:
 
       - name: Build APK
         run: |
+          which git || echo "⚠️ git not found in PATH"
+          git --version || echo "⚠️ git not executable"
+          which buildozer || echo "⚠️ buildozer not found"
           buildozer -v android debug
         env:
-          PATH: ${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
+          PATH: /usr/bin:${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
