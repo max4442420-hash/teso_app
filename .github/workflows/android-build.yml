@@ -14,7 +14,7 @@ jobs:
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: false  # Submodule-ok letiltása, mert a .buildozer nem része a repo-nak
+          submodules: false  # Submodule-ok letiltása a korábbi dav1d hiba miatt
 
       - name: 🧰 Set up Python
         uses: actions/setup-python@v5
@@ -27,8 +27,8 @@ jobs:
           sudo apt-get install -y \
             unzip zip libffi-dev libssl-dev \
             autoconf automake libtool pkg-config \
-            libncurses5 libncurses5-dev libtinfo5 \
-            git openjdk-17-jdk  # Git és JDK hozzáadása
+            libncurses6 libncursesw6 libtinfo6 \
+            git openjdk-17-jdk  # Frissített csomagok és szükséges függőségek
 
       - name: 🐍 Install Buildozer
         run: |
