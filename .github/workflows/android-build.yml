@@ -1,4 +1,4 @@
-- name: Download Android SDK and NDK
+ name: Download Android SDK and NDK
   run: |
     mkdir -p $HOME/android-sdk/cmdline-tools
     cd $HOME/android-sdk/cmdline-tools
