@@ -24,45 +24,57 @@ jobs:
           pip install --user buildozer==1.5.0 cython virtualenv
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/bin:$PATH"
-          git --version
-          buildozer --version
+          buildozer --version || { echo "⚠️ Buildozer command failed"; exit 1; }
+          git --version || { echo "⚠️ Git not found"; exit 1; }
 
       - name: Download Android SDK and NDK
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
 
-          # ✅ Letöltjük a Google SDK command line tools-t
+          # ✅ Letöltjük a Google SDK command line tools-t (ellenőrizd a verziót!)
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q sdk-tools.zip -d cmdline-tools-temp
           rm sdk-tools.zip
 
-          # ✅ Áthelyezzük a helyes struktúrába
+          # ✅ Ellenőrizzük a kicsomagolt tartalmat
+          ls -la cmdline-tools-temp/
+
+          # ✅ Helyére rakjuk a "latest" mappát
           mkdir -p latest
-          mv cmdline-tools-temp/* latest/ || mv cmdline-tools-temp/. latest/
+          if [ -d "cmdline-tools-temp/cmdline-tools" ]; then
+            mv cmdline-tools-temp/cmdline-tools/* latest/ || mv cmdline-tools-temp/cmdline-tools/. latest/
+          else
+            mv cmdline-tools-temp/* latest/ || mv cmdline-tools-temp/. latest/
+          fi
           rm -rf cmdline-tools-temp
 
-          # ✅ Ellenőrizzük, hogy létezik az sdkmanager
+          # ✅ Ellenőrzés
           if [ ! -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
             echo "❌ sdkmanager nem található!"
             exit 1
           fi
 
-          echo "✅ sdkmanager OK!"
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
 
-          # ✅ Licenszek elfogadása és SDK csomagok telepítése
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses || true
+          # ✅ Licenszek elfogadása (ismételt próbálkozás és ellenőrzés)
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses  # Második próbálkozás
+          # Ellenőrizzük, hogy a build-tools licence elfogadásra került-e
+          if ! $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --list_installed | grep -q "build-tools;36.1.0"; then
+            echo "⚠️ build-tools;36.1.0 nincs telepítve vagy licence nincs elfogadva!"
+            exit 1
+          fi
+
+          # ✅ Szükséges csomagok telepítése, beleértve a build-tools-t
           yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
             --sdk_root=$HOME/android-sdk \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;36.1.0"
+            "platform-tools" "platforms;android-34" "build-tools;36.1.0"
 
-          # ✅ Ellenőrizzük, hogy a build-tools települt
+          # ✅ Ellenőrizzük a build-tools mappát
           if [ ! -d "$HOME/android-sdk/build-tools/36.1.0" ]; then
             echo "❌ build-tools 36.1.0 nem található!"
-            ls -la $HOME/android-sdk/build-tools/
+            ls -la $HOME/android-sdk/build-tools/  # Debug célú kimenet
             exit 1
           fi
 
@@ -72,7 +84,7 @@ jobs:
           unzip -q ndk.zip
           rm ndk.zip
 
-          # ✅ PATH beállítása
+          # ✅ PATH frissítés
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
           echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
@@ -80,11 +92,12 @@ jobs:
       - name: Debug environment
         run: |
           echo "PATH: $PATH"
-          git --version
           python3 --version
           pip list
-          ls -la $HOME/android-sdk/build-tools/
+          git --version
+          ls -la $HOME/.local/bin/
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+          ls -la $HOME/android-sdk/build-tools/
           ls -la $HOME/android-ndk-r25b | head -n 10
 
       - name: Initialize buildozer
@@ -95,16 +108,22 @@ jobs:
           sed -i 's/requirements = python3,hostpython3/requirements = python3,kivy==2.1.0/g' buildozer.spec
           echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
           echo "android.ndk_path = $HOME/android-ndk-r25b" >> buildozer.spec
-          echo "android.accept_sdk_license = True" >> buildozer.spec
           cat buildozer.spec
 
       - name: Clean Buildozer cache
         run: |
           rm -rf .buildozer
 
+      - name: Verify buildozer before build
+        run: |
+          which buildozer || { echo "⚠️ buildozer not found"; exit 1; }
+          buildozer --version
+
       - name: Build APK
         run: |
-          git --version || { echo "⚠️ git not found"; exit 1; }
+          which git || { echo "⚠️ git not found in PATH"; exit 1; }
+          git --version || { echo "⚠️ git not executable"; exit 1; }
+          which buildozer || { echo "⚠️ buildozer not found"; exit 1; }
           buildozer -v android debug
         env:
           PATH: /usr/bin:${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
