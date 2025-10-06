@@ -24,19 +24,27 @@ jobs:
           pip install --user buildozer==1.5.0 cython virtualenv
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/bin:$PATH"
-          which buildozer || echo "❌ Buildozer binary not found"
           buildozer --version || echo "⚠️ Buildozer command failed"
 
       - name: Download Android SDK and NDK
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
+          
+          # ✅ letöltjük az SDK command line tools-t
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q sdk-tools.zip -d latest
+          unzip -q sdk-tools.zip
           rm sdk-tools.zip
 
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
-          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+          # ✅ helyesen mozgatjuk a fájlokat a 'latest' mappába
+          mkdir -p latest
+          mv cmdline-tools latest/
+          
+          # ✅ most már létezni fog a bin
+          ls -la latest/cmdline-tools/bin/
+
+          yes | $HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin/sdkmanager --licenses
+          yes | $HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin/sdkmanager \
             "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
           cd $HOME
@@ -44,7 +52,7 @@ jobs:
           unzip -q ndk.zip
           rm ndk.zip
 
-          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
           echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
 
@@ -59,15 +67,12 @@ jobs:
           echo "android.ndk_path = $HOME/android-ndk-r25b" >> buildozer.spec
           cat buildozer.spec
 
-      - name: Clean Buildozer cache
-        run: rm -rf .buildozer
-
       - name: Build APK
         run: |
           export PATH="$HOME/.local/bin:$PATH"
           buildozer -v android debug
         env:
-          PATH: ${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
+          PATH: ${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin:$HOME/android-ndk-r25b
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
