@@ -24,41 +24,61 @@ jobs:
           pip install --user buildozer==1.5.0 cython virtualenv
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/bin:$PATH"
-          buildozer --version || echo "⚠️ Buildozer command failed"
+          buildozer --version || { echo "⚠️ Buildozer command failed"; exit 1; }
 
       - name: Download Android SDK and NDK
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
           
-          # ✅ letöltjük az SDK command line tools-t
+          # ✅ Letöltjük az SDK command line tools-t
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
           unzip -q sdk-tools.zip
           rm sdk-tools.zip
 
-          # ✅ helyesen mozgatjuk a fájlokat a 'latest' mappába
+          # ✅ Mozgatjuk a tartalmat a 'latest' mappába
           mkdir -p latest
-          mv cmdline-tools latest/
+          mv cmdline-tools/* latest/ || mv cmdline-tools/. latest/  # Biztosítjuk, hogy minden tartalom átkerüljön
+          rm -rf cmdline-tools  # Töröljük az üres mappát
           
-          # ✅ most már létezni fog a bin
-          ls -la latest/cmdline-tools/bin/
+          # ✅ Ellenőrizzük a bin mappa létezését
+          if [ ! -d "$HOME/android-sdk/cmdline-tools/latest/bin" ]; then
+            echo "Error: SDK bin directory not found"
+            exit 1
+          fi
+          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
 
-          yes | $HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin/sdkmanager --licenses
-          yes | $HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin/sdkmanager \
-            "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          # ✅ Licenc elfogadás és komponensek telepítése
+          if [ -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+            yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
+            yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+              --sdk_root=$HOME/android-sdk \
+              "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          else
+            echo "Error: sdkmanager not found"
+            exit 1
+          fi
 
           cd $HOME
           curl -o ndk.zip https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
           unzip -q ndk.zip
           rm ndk.zip
 
-          echo "$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
           echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
 
+      - name: Debug environment
+        run: |
+          echo "PATH: $PATH"
+          python3 --version
+          pip list
+          ls -la $HOME/.local/bin/
+          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+          ls -la $HOME/android-ndk-r25b
+
       - name: Initialize buildozer
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
           buildozer init || true
           sed -i 's/# package.domain = mydomain/package.domain = max4442/g' buildozer.spec
           sed -i 's/# package.name = myapp/package.name = teso_app/g' buildozer.spec
@@ -67,12 +87,15 @@ jobs:
           echo "android.ndk_path = $HOME/android-ndk-r25b" >> buildozer.spec
           cat buildozer.spec
 
+      - name: Clean Buildozer cache
+        run: |
+          rm -rf .buildozer
+
       - name: Build APK
         run: |
-          export PATH="$HOME/.local/bin:$PATH"
           buildozer -v android debug
         env:
-          PATH: ${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin:$HOME/android-ndk-r25b
+          PATH: ${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
