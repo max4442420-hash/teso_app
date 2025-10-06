@@ -1,107 +1,103 @@
-name: Build Kivy Android App
-
+name: Build Android APK
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: 📦 Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          submodules: false  # Submodule-ok letiltása a dav1d hiba elkerülésére
-
-      - name: 🧰 Set up Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-
-      - name: ⚙️ Install system dependencies
+          python-version: "3.10"
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            unzip zip libffi-dev libssl-dev \
-            autoconf automake libtool pkg-config \
-            libncurses6 libncursesw6 libtinfo6 \
-            git openjdk-17-jdk
-
-      - name: 🐍 Install Buildozer and python-for-android
-        run: |
+          sudo apt-get install -y zip unzip openjdk-17-jdk python3-pip curl git
           pip install --upgrade pip
-          pip install buildozer cython virtualenv python-for-android
-          pip show python-for-android  # Ellenőrzi, hogy a python-for-android telepítve van-e
-
-      - name: 📦 Download Android SDK
+          pip install --user buildozer==1.5.0 cython virtualenv
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/bin:$PATH"
+          buildozer --version || { echo "⚠️ Buildozer command failed"; exit 1; }
+          git --version || { echo "⚠️ Git not found"; exit 1; }
+      - name: Download Android SDK and NDK
         run: |
-          echo "📦 Downloading Android SDK..."
-          mkdir -p $HOME/android-sdk
-          cd $HOME/android-sdk
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          cd $HOME/android-sdk/cmdline-tools
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip sdk-tools.zip -d temp-sdk
-          mkdir -p $HOME/android-sdk/cmdline-tools/latest
-          mv temp-sdk/cmdline-tools/* $HOME/android-sdk/cmdline-tools/latest/
-          echo "✅ SDK tools installed"
-          ls -la $HOME/android-sdk/cmdline-tools/latest/bin
-
-      - name: 📜 Accept Android licenses and install build tools
-        run: |
-          export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
-          yes | sdkmanager --licenses
-          sdkmanager "platforms;android-33" "build-tools;34.0.0" "platform-tools"
-
-      - name: 🧹 Clean Buildozer cache
-        run: |
-          rm -rf ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/hostpython3
-          rm -rf ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build
-          buildozer android clean
-
-      - name: 📥 Clone Python 3.11 source
-        run: |
-          mkdir -p ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/
-          cd ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/
-          if [ ! -d "hostpython3" ]; then
-            git clone --branch 3.11 https://github.com/python/cpython hostpython3
+          unzip -q sdk-tools.zip -d cmdline-tools-temp
+          rm sdk-tools.zip
+          ls -la cmdline-tools-temp/
+          mkdir -p latest
+          if [ -d "cmdline-tools-temp/cmdline-tools" ]; then
+            mv cmdline-tools-temp/cmdline-tools/* latest/ || mv cmdline-tools-temp/cmdline-tools/. latest/
           else
-            echo "hostpython3 already exists, skipping clone."
+            mv cmdline-tools-temp/* latest/ || mv cmdline-tools-temp/. latest/
           fi
-
-      - name: 🛠️ Patch fileutils.c for Android
-        run: |
-          cd ~/.buildozer/android/platform/build-arm64-v8a_armeabi-v7a/build/other_builds/hostpython3/Python
-          if [ -f "fileutils.c" ]; then
-            cp fileutils.c fileutils.c.bak
-            if grep -q "close_range(first, last, 0)" fileutils.c; then
-              sed -i 's/if (close_range(first, last, 0) == 0)/#ifdef __ANDROID__\n    for (int fd = first; fd <= last; fd++) { close(fd); }\n#else\n    if (close_range(first, last, 0) == 0)/' fileutils.c
-            else
-              echo "Warning: close_range not found in fileutils.c, skipping patch."
-            fi
-          else
-            echo "Error: fileutils.c not found."
+          rm -rf cmdline-tools-temp
+          if [ ! -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "❌ sdkmanager nem található!"
             exit 1
           fi
-
-      - name: 🏗️ Build APK with Buildozer
+          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
+          sleep 5
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
+          if ! $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --list_installed | grep -q "build-tools;36.1.0"; then
+            echo "⚠️ build-tools;36.1.0 nincs telepítve vagy licence nincs elfogadva!"
+            $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --list_installed
+            exit 1
+          fi
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk "platform-tools" "platforms;android-34" "build-tools;36.1.0"
+          sleep 5
+          if [ ! -d "$HOME/android-sdk/build-tools/36.1.0" ]; then
+            echo "❌ build-tools 36.1.0 nem található!"
+            ls -la $HOME/android-sdk/build-tools/
+            exit 1
+          fi
+          cd $HOME
+          curl -o ndk.zip https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+          unzip -q ndk.zip
+          rm ndk.zip
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
+      - name: Debug environment
         run: |
-          export ANDROID_HOME=$HOME/android-sdk
-          export PATH=$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
-          buildozer -v android debug 2>&1 | tee buildozer.log
-
-      - name: 📤 Upload Buildozer log
-        if: always()  # Mindig feltölti a naplót, hogy lássuk a hibát
+          echo "PATH: $PATH"
+          python3 --version
+          pip list
+          git --version
+          ls -la $HOME/.local/bin/
+          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+          ls -la $HOME/android-sdk/build-tools/
+          ls -la $HOME/android-ndk-r25b | head -n 10
+      - name: Initialize buildozer
+        run: |
+          buildozer init || true
+          sed -i 's/# package.domain = mydomain/package.domain = max4442/g' buildozer.spec
+          sed -i 's/# package.name = myapp/package.name = teso_app/g' buildozer.spec
+          sed -i 's/requirements = python3,hostpython3/requirements = python3,kivy==2.1.0/g' buildozer.spec
+          echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
+          echo "android.ndk_path = $HOME/android-ndk-r25b" >> buildozer.spec
+          cat buildozer.spec
+      - name: Clean Buildozer cache
+        run: rm -rf .buildozer
+      - name: Verify buildozer before build
+        run: |
+          which buildozer || { echo "⚠️ buildozer not found"; exit 1; }
+          buildozer --version
+      - name: Build APK
+        run: |
+          which git || { echo "⚠️ git not found in PATH"; exit 1; }
+          git --version || { echo "⚠️ git not executable"; exit 1; }
+          which buildozer || { echo "⚠️ buildozer not found"; exit 1; }
+          buildozer -v android debug
+        env:
+          PATH: /usr/bin:${{ env.PATH }}:$HOME/.local/bin:$HOME/android-sdk/platform-tools:$HOME/android-sdk/cmdline-tools/latest/bin:$HOME/android-ndk-r25b
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: buildozer-log
-          path: buildozer.log
-
-      - name: 📤 Upload built APK
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: teso_app
+          name: teso_app-apk
           path: bin/*.apk
