@@ -19,52 +19,50 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y zip unzip openjdk-17-jdk python3-pip curl git  # Git biztosan telepítve lesz
+          sudo apt-get install -y zip unzip openjdk-17-jdk python3-pip curl git
           pip install --upgrade pip
           pip install --user buildozer==1.5.0 cython virtualenv
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           export PATH="$HOME/.local/bin:$PATH"
-          buildozer --version || { echo "⚠️ Buildozer command failed"; exit 1; }
-          git --version || { echo "⚠️ Git not found after installation"; exit 1; }  # Ellenőrzés
+          buildozer --version
+          git --version
 
       - name: Download Android SDK and NDK
         run: |
           mkdir -p $HOME/android-sdk/cmdline-tools
           cd $HOME/android-sdk/cmdline-tools
-          
-          # ✅ Letöltjük az SDK command line tools-t
+
+          # ✅ Letöltjük a Google SDK command line tools-t
           curl -o sdk-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
-          unzip -q sdk-tools.zip
+          unzip -q sdk-tools.zip -d cmdline-tools-temp
           rm sdk-tools.zip
 
-          # ✅ Mozgatjuk a tartalmat a 'latest' mappába
+          # ✅ Helyére rakjuk a "latest" mappát
           mkdir -p latest
-          mv cmdline-tools/* latest/ || mv cmdline-tools/. latest/  # Biztosítjuk, hogy minden tartalom átkerüljön
-          rm -rf cmdline-tools  # Töröljük az üres mappát
-          
-          # ✅ Ellenőrizzük a bin mappa létezését
-          if [ ! -d "$HOME/android-sdk/cmdline-tools/latest/bin" ]; then
-            echo "Error: SDK bin directory not found"
+          mv cmdline-tools-temp/* latest/
+          rm -rf cmdline-tools-temp
+
+          # ✅ Ellenőrzés
+          if [ ! -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "❌ sdkmanager nem található!"
             exit 1
           fi
+
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
 
-          # ✅ Licenc elfogadás és komponensek telepítése
-          if [ -f "$HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
-            yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
-            yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
-              --sdk_root=$HOME/android-sdk \
-              "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-          else
-            echo "Error: sdkmanager not found"
-            exit 1
-          fi
+          # ✅ Licenszek elfogadása és szükséges csomagok telepítése
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=$HOME/android-sdk --licenses
+          yes | $HOME/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+            --sdk_root=$HOME/android-sdk \
+            "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
+          # ✅ Android NDK letöltés
           cd $HOME
           curl -o ndk.zip https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
           unzip -q ndk.zip
           rm ndk.zip
 
+          # ✅ PATH frissítés
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
           echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
           echo "$HOME/android-ndk-r25b" >> $GITHUB_PATH
@@ -73,11 +71,11 @@ jobs:
         run: |
           echo "PATH: $PATH"
           python3 --version
-          pip list
+          pip list | grep buildozer
+          git --version
           ls -la $HOME/.local/bin/
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
-          ls -la $HOME/android-ndk-r25b
-          git --version || echo "Git not found"
+          ls -la $HOME/android-ndk-r25b | head -n 10
 
       - name: Initialize buildozer
         run: |
@@ -92,6 +90,11 @@ jobs:
       - name: Clean Buildozer cache
         run: |
           rm -rf .buildozer
+
+      - name: Verify buildozer before build
+        run: |
+          which buildozer || echo "⚠️ buildozer not found"
+          buildozer --version
 
       - name: Build APK
         run: |
